@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "S2 Solo")(type "KiCad")(uri "${KIPRJMOD}/S2 Solo.kicad_sym")(options "")(descr ""))
+  (lib (name "BH1730")(type "KiCad")(uri "${KIPRJMOD}/BH1730.kicad_sym")(options "")(descr ""))
+)

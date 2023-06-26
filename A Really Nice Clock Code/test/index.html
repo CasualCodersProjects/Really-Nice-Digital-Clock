@@ -1,0 +1,107 @@
+<html>
+  <head>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #1e1e1e;
+      }
+      form {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+      label {
+        padding: 2px;
+        color: #9cdcfe;
+        display: flex;
+        align-items: center;
+      }
+      h1 {
+        color: #4ec9b0;
+        margin: 20px;
+      }
+      div {
+        height: 100px;
+        width: 100%;
+        background-color: #1e1e1e;
+        display: flex;
+        justify-content: center;
+      }
+      hr {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>A Really Nice Digital Clock</h1>
+    </div>
+    <hr>
+    
+    <form>
+      <label for="timezone">Timezone:</label>
+      <select id="timezone">
+        <option value="opt1">Option 1</option>
+        <option value="opt2">Option 2</option>
+        <option value="opt3">Option 3</option>
+      </select>
+    </form>
+    <form>
+      <label for="24HrFormat">Use 24-hour format:</label>
+      <input type="checkbox" id="24HrFormat" name="24HrFormat" value="24HrFormat">
+    </form> 
+
+    <hr>
+
+    <label for="WiFi">WiFi</label>
+    <form>
+      <input type="text" id="SSID" placeholder="SSID" value="">
+    </form>
+    <form>
+      <input type="text" id="PWD" placeholder="Password" value="">
+    </form>
+    <button id="updateWifi">Update</button>
+
+    <hr>
+
+    <label for="brightness">Brightness Controls</label>
+    <form>
+      <label for="min">Min:</label>
+      <input type="range" id="min">
+    </form>
+    <form>
+      <label for="max">Max:</label>
+      <input type="range" id="max">
+    </form>
+  </body>
+</html>  
+    
+
+        
+        <!-- <script>
+            document.getElementById('startButton').addEventListener('click', function(event){
+            event.preventDefault();
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/start', true);
+            xhr.send();
+            });
+            document.getElementById('stopButton').addEventListener('click', function(event){
+            event.preventDefault();
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/stop', true);
+            xhr.send();
+            });
+            document.getElementById('slider').addEventListener('change', function(event){
+            event.preventDefault();
+            dutyCycle = event.target.value;
+            document.querySelector('#sliderValue').value = dutyCycle;
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/set', true);
+            xhr.setRequestHeader('Content-Type', 'text/plain');
+            xhr.send(dutyCycle);
+            });
+        </script>
+    </body>
+</html> -->
