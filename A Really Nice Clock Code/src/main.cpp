@@ -5,8 +5,8 @@
 #include <ESPAsyncWebServer.h>
 
 // WiFi credentials
-const char *ssid = "Znet";
-const char *passwd = "Znet2017";
+const char *ssid = "SSID";
+const char *passwd = "PASSWORD";
 
 // Timezone
 const int TIMEZONE = -5;
