@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nice Clock</title>
+    <link rel="stylesheet" href="milligram.min.css">
+    <script src="moment.min.js"></script>
+    <script src="moment-timezone.min.js"></script>
+</head>
+
+<body>
+  <h1 class="text-center p-1">A Really Nice Digital Clock</h1>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>Set your timezone:</h2>
+        <select id="timezone">
+          <option value="">Select timezone</option>
+        </select>
+        <div id='result'></div>
+        <button type="button" id="updateTZ" onclick="submitTZForm()">Update</button>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>WiFi:</h2>
+        <form id="wifiForm">
+          <input type="text" name="ssid" id="ssid" placeholder="SSID">
+          <br>
+          <input type="text" name="psk" id="psk" placeholder="Password">
+          <br>
+          <input type="button" id="submit" name="submit" onclick="submitWiFiForm()" value="Submit">
+        </form>
+        <div id='result'></div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>Brightness:</h2>
+        <form id="brightnessForm">
+          <label for="minBrightness">Minimum Brightness</label>
+          <br>
+          <input type="range" class="range" min="0" max="255" id="minBrightnessSlider" name="minBrightnessSlider"value="20" oninput="updateNumberBox('minBrightness', 'minBrightnessSlider')" onmouseup="updateBrightness()">
+          <span id="minBrightness">20</span>
+          <br>
+          <label for="maxBrightness">Maximum Brightness</label>
+          <br>
+          <input type="range" class="range" min="0" max="255" id="maxBrightnessSlider" name="maxBrightnessSlider" value="255" oninput="updateNumberBox('maxBrightness', 'maxBrightnessSlider')" onmouseup="updateBrightness()">
+          <span id="maxBrightness">255</span>
+        </form>
+        <div id='result'></div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <div class="alert dissappear" id="TZUpdated">
+          Timezone Updated
+        </div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <script>
+    // Generate a list of timezones using Moment.js
+    var timezones = moment.tz.names();
+    console.log(timezones)
+
+    // Populate the timezone dropdown
+    var timezoneSelect = document.getElementById("timezone");
+    for (var i in timezones) {
+      var option = document.createElement("option");
+      option.value = timezones[i];
+      var offset = moment.tz(timezones[i]).format('Z');
+      option.text = '('+offset+') - ' + timezones[i];
+      timezoneSelect.add(option);
+    }
+
+    /*// Does not function.
+    document.getElementById("updateTZ").addEventListener("click", function(event){
+      event.preventDefault();
+      var selectedTimezone = document.getElementById("timezone").value;
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/setTZ', true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify({ timezone: selectedTimezone }));
+    });*/
+
+    // Submit the timezone form
+    function submitTZForm() {
+      var selectedTimezone = document.getElementById("timezone").value;
+      var formData = new FormData();
+      formData.append("timezone", selectedTimezone);
+
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/setTZ', true);
+      xhr.send(formData);
+    }
+
+    // Posts wifi data when the associated 'submit' button is pressed.
+    function submitWiFiForm(){
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData(document.getElementById('wifiForm'));
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/updateWiFi', true);
+      xhr.send(formData);
+    }
+
+    // Link the external number view to the slider.
+    // Links the sliders together, such that min cannot be less than max, and max cannot be less than min.
+    function updateNumberBox(numberBoxId, sliderId) {
+      var numberBox = document.getElementById(numberBoxId);
+      var slider = document.getElementById(sliderId);
+      numberBox.textContent = slider.value;
+  
+      if (sliderId === 'minBrightnessSlider' && Number(minBrightnessSlider.value) > Number(maxBrightnessSlider.value)) {
+        maxBrightnessSlider.value = minBrightnessSlider.value;
+        document.getElementById('maxBrightness').textContent = minBrightnessSlider.value;
+      }
+  
+      if (sliderId === 'maxBrightnessSlider' && Number(maxBrightnessSlider.value) < Number(minBrightnessSlider.value)) {
+        minBrightnessSlider.value = maxBrightnessSlider.value;
+        document.getElementById('minBrightness').textContent = maxBrightnessSlider.value;
+      }
+    }
+
+    // Posts brightness data when the slider is released
+    function updateBrightness(){
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData(document.getElementById('brightnessForm'));
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/updateBrightness', true);
+      xhr.send(formData);
+    }
+  </script>
+</body>
+</html>

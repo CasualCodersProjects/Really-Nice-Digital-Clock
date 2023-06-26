@@ -1,4 +1,0 @@
-(sym_lib_table
-  (lib (name "MCU_Espressif")(type "KiCad")(uri "${KIPRJMOD}/MCU_Espressif.kicad_sym")(options "")(descr ""))
-  (lib (name "BH1730")(type "KiCad")(uri "${KIPRJMOD}/BH1730.kicad_sym")(options "")(descr ""))
-)
