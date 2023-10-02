@@ -266,6 +266,16 @@ void loop() {
     WiFi.softAPdisconnect();
     WiFi.mode(WIFI_STA);
     softAPActive = false;
+    timeClient.update();
+  }
+
+  // Lost connection to the internet. Re-Enable the AP to avoid getting stuck.
+  if(!softAPActive && !WiFi.isConnected()) {
+    Serial.println("Lost Internet. Restarting AP.");
+    WiFi.softAPsetHostname("nixeclock");
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP(APID, APSK);
+    softAPActive = true;
   }
 
   // Debug logging
