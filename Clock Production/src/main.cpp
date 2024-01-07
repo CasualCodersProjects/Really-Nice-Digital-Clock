@@ -6,10 +6,9 @@
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <Wire.h>
-#include "index.h"
 #include <NTPClient.h>
 #include <time.h>
-
+#include <movingAvg.h>  
 
 // User Memory - WiFi SSID, PSK, Clock Configuration bits.
 Preferences preferences;
@@ -21,6 +20,7 @@ const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%T
 
 // Global Variables
 bool softAPActive = 0;
+bool showIP = 0;
 
 // Server Stuff
 WiFiUDP ntpUDP;
@@ -36,37 +36,77 @@ const int ledChannel = 0;
 const int resolution = 8;
 
 // Pins used for segment displays
-const int minutes_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
-const int hours_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
+const int hours_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
+const int minutes_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
 
+/// @brief Prints the time to 4 segment displays
+/// @param hours integer number 0-99
+/// @param minutes integer number 0-99
 void printTime(int hours, int minutes){
-  // Serial.println("Printing: " + String(hours) + ":" + String(minutes));
+  bool timeFormat = preferences.getBool("timeFormat", 1);
+  // Serial.println(timeFormat);
+  if (!timeFormat) {
+    hours = (hours % 12) ?: 12;
+  }
+
+  // Break up the two digit integers to single digits.
   int hoursT = hours / 10;
   int hoursO = hours % 10;
   int minutesT = minutes / 10;
   int minutesO = minutes % 10;
 
-  digitalWrite(13, (hoursT >> 0) & 1);  // A4
-  digitalWrite(10, (hoursT >> 1) & 1);  // B4
-  digitalWrite(11, (hoursT >> 2) & 1);  // C4
-  digitalWrite(12, (hoursT >> 3) & 1);  // D4
+  // Write binary coded decimal to each display.
+  // Tens Place
+  digitalWrite(hours_pin[4], (hoursT >> 0) & 1);  // A4
+  digitalWrite(hours_pin[5], (hoursT >> 1) & 1);  // B4
+  digitalWrite(hours_pin[6], (hoursT >> 2) & 1);  // C4
+  digitalWrite(hours_pin[7], (hoursT >> 3) & 1);  // D4
 
-  digitalWrite(9, (hoursO >> 0) & 1);   // A3
-  digitalWrite(8, (hoursO >> 1) & 1);  // B3
-  digitalWrite(3, (hoursO >> 2) & 1);  // C3
-  digitalWrite(14, (hoursO >> 3) & 1);  // D3
+  // Ones Place
+  digitalWrite(hours_pin[0], (hoursO >> 0) & 1);   // A3
+  digitalWrite(hours_pin[1], (hoursO >> 1) & 1);  // B3
+  digitalWrite(hours_pin[2], (hoursO >> 2) & 1);  // C3
+  digitalWrite(hours_pin[3], (hoursO >> 3) & 1);  // D3
 
-  digitalWrite(18, (minutesT >> 0) & 1);  // A2
-  digitalWrite(15, (minutesT >> 1) & 1);  // B2
-  digitalWrite(16, (minutesT >> 2) & 1);  // C2
-  digitalWrite(17, (minutesT >> 3) & 1);  // D2
+  // Tens Place
+  digitalWrite(minutes_pin[4], (minutesT >> 0) & 1);  // A2
+  digitalWrite(minutes_pin[5], (minutesT >> 1) & 1);  // B2
+  digitalWrite(minutes_pin[6], (minutesT >> 2) & 1);  // C2
+  digitalWrite(minutes_pin[7], (minutesT >> 3) & 1);  // D2
 
-  digitalWrite(7, (minutesO >> 0) & 1);  // A1
-  digitalWrite(4, (minutesO >> 1) & 1);  // B1
-  digitalWrite(5, (minutesO >> 2) & 1);  // C1
-  digitalWrite(6, (minutesO >> 3) & 1);  // D1
+  // Ones Place
+  digitalWrite(minutes_pin[0], (minutesO >> 0) & 1);  // A1
+  digitalWrite(minutes_pin[1], (minutesO >> 1) & 1);  // B1
+  digitalWrite(minutes_pin[2], (minutesO >> 2) & 1);  // C1
+  digitalWrite(minutes_pin[3], (minutesO >> 3) & 1);  // D1
 }
 
+static void IRAM_ATTR showIPFlag(){
+  showIP = 1;
+}
+
+void displayIP(IPAddress localIP) {
+  pinMode(38, OUTPUT);
+  digitalWrite(decimalPin, 1);
+  digitalWrite(38, 0);
+
+  int octet0 = localIP[0];
+  int octet1 = localIP[1];
+  int octet2 = localIP[2];
+  int octet3 = localIP[3];
+
+  printTime(octet0 / 100, octet0 % 100);
+  delay(1500);
+  printTime(octet1 / 100, octet1 % 100);
+  delay(1500);
+  printTime(octet2 / 100, octet2 % 100);
+  delay(1500);
+  printTime(octet3 / 100, octet3 % 100);
+  delay(1500);
+
+  digitalWrite(decimalPin, 0);
+  pinMode(38, INPUT);
+}
 
 void initLightSensor() {
   Wire.beginTransmission(0x29);
@@ -89,8 +129,16 @@ uint8_t readAmbientLightData(){
   int lightLevel = (highByte << 8) | lowByte;
 
   // return the ambient light level
-  return( map(lightLevel, 10, 65535, preferences.getInt("minBrightness", 20), preferences.getInt("maxBrightness", 255)) );
+  return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 10), preferences.getInt("maxBrightness", 255)) );
 }
+
+movingAvg ambientLight(10);
+
+// Ambient Light Moving Average
+const int numReadings = 10; // Number of readings to average
+int readings[numReadings];   // Array to store readings
+int indexAmbient = 0;               // Index for the current reading
+int total = 0;               // Running total of readings
 
 // Initial Setup Function
 void setup() {
@@ -103,13 +151,18 @@ void setup() {
 
   setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
   tzset();
-  ledcSetup(0, 2000, 8);
+  ledcSetup(0, freq, 8);
   ledcAttachPin(ledPin, 0);
   ledcWrite(0, 50);
 
   // Begin I2C on pins 34, 33.
   Wire.begin(33, 21);
   initLightSensor();
+  ambientLight.begin();
+
+  for (int i = 0; i < numReadings; i++) {
+    ambientLight.reading(readAmbientLightData());
+  }
 
   // Activate the decimal point as hour indicator.
   pinMode(decimalPin, OUTPUT);
@@ -134,7 +187,7 @@ void setup() {
     Serial.println("WiFi not configured. Skipping network connection.");
   }
 
-// WiFi Credentials exist. Configure WiFi and attempt to connect.
+  // WiFi Credentials exist. Configure WiFi and attempt to connect.
   else {
     Serial.println("WiFi Configured. Attempting Connection.");
    
@@ -155,6 +208,7 @@ void setup() {
       WiFi.softAPdisconnect();
       WiFi.mode(WIFI_STA);
       softAPActive = false;
+      displayIP(WiFi.localIP());
     }
 
     // Connection unsuccessful. Continue to main loop.
@@ -181,22 +235,10 @@ void setup() {
     request->send(SPIFFS, "/milligram.min.css", "text/css");
   });
 
-  // Route to load style.css file
-  server.on("/bootstrap.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Loading BS Script");
-    request->send(SPIFFS, "/bootstrap.min.js", "application/javascript");
-  });
-
-  // Route to load style.css file
-  server.on("/moment.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Loading moment");
-    request->send(SPIFFS, "/moment.min.js", "application/javascript");
-  });
-
-  // Route to load style.css file
-  server.on("/moment-timezone.min.js", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Loading moment timezone");
-    request->send(SPIFFS, "/moment-timezone.min.js", "application/javascript");
+  // Route to load TimeZone information.
+  server.on("/zones.csv", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println("Loading zones");
+    request->send(SPIFFS, "/zones.csv", "text/csv");
   });
 
   // Handle HTTP POST requests for the root page
@@ -222,7 +264,46 @@ void setup() {
     request->send(200);
   });
 
-  // Handle HTTP POST requests for the root page
+  // Toggle between 12h and 24h format.
+  server.on("/updateTimeFormat", HTTP_POST, [](AsyncWebServerRequest *request) {
+    // Handling input data from the webpage
+    if (request->hasArg("isChecked")) {
+      String isChecked = request->arg("isChecked");
+      if (isChecked == "true") {
+        preferences.putBool("timeFormat", 0);
+      } else {
+        preferences.putBool("timeFormat", 1);
+      }
+    }
+
+    request->send(200);
+  });
+
+  // Route to get configured time format (12|24)
+  server.on("/getTimeFormat", HTTP_GET, [](AsyncWebServerRequest *request){
+    String checkboxStateStr = preferences.getBool("timeFormat", 1) ? "false" : "true";
+    request->send(200, "text/plain", checkboxStateStr);
+  });
+
+  // Route to get configured WiFi SSID
+  server.on("/getWiFiSSID", HTTP_GET, [](AsyncWebServerRequest *request){
+    String wiFiSSID = preferences.getString("WiFiSSID", "");
+    request->send(200, "text/plain", wiFiSSID);
+  });
+
+  // Route to get configured Minimum Brightness
+  server.on("/getMinBrightness", HTTP_GET, [](AsyncWebServerRequest *request){
+    String minBrightness = String(preferences.getInt("minBrightness", 10));
+    request->send(200, "text/plain", minBrightness);
+  });
+
+  // Route to get configured Maximum Brightness
+  server.on("/getMaxBrightness", HTTP_GET, [](AsyncWebServerRequest *request){
+    String maxBrightness = String(preferences.getInt("maxBrightness", 255));
+    request->send(200, "text/plain", maxBrightness);
+  });
+
+  // Route to get update ESP-Side Brightness limits.
   server.on("/updateBrightness", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println("Request Received");
 
@@ -239,7 +320,7 @@ void setup() {
     request->send(200);
   });
 
-  // Handle HTTP POST requests for the root page
+  // Route to update timezone.
   server.on("/setTZ", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println("Request Received");
 
@@ -257,7 +338,10 @@ void setup() {
 
   // Start the server
   server.begin();
+
+  attachInterrupt(0, showIPFlag, FALLING);
 }
+
 
 void loop() {
   // Connection Successful. Teardown and disable AP.
@@ -272,18 +356,18 @@ void loop() {
   // Lost connection to the internet. Re-Enable the AP to avoid getting stuck.
   if(!softAPActive && !WiFi.isConnected()) {
     Serial.println("Lost Internet. Restarting AP.");
-    WiFi.softAPsetHostname("nixeclock");
+    WiFi.softAPsetHostname("niceclock");
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(APID, APSK);
     softAPActive = true;
   }
 
-  // Debug logging
   // Reconnect to NTP To update time at midnight every night
   if(timeClient.getMinutes() == 0 && timeClient.getSeconds() == 0){
     timeClient.update();
     delay(1000);
   }
+
   // Base the time on epoch. This allows DST To work automatically.
   time_t now = timeClient.getEpochTime();
   struct tm *timeinfo = localtime(&now);
@@ -291,6 +375,16 @@ void loop() {
   // Print the timezone info to SSDs
   printTime(timeinfo->tm_hour, timeinfo->tm_min);
 
-  // Adjust light intensity.
-  ledcWrite(0, readAmbientLightData());
+  // Adjust light intensity using a moving average
+  if ((millis() % 25) == 0) {
+    uint8_t ambiReading = ambientLight.reading(readAmbientLightData());
+    // Serial.println(ambiReading);
+    ledcWrite(0, ambiReading);
+  }
+
+  // Display IP if button flagged
+  if (showIP){
+    displayIP(WiFi.localIP());
+    showIP = 0;
+  }
 }
