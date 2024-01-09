@@ -39,6 +39,7 @@ const int minutes_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
 // Additional Control Pins
 const int ledPin = 1;       // Power pin for segment displays. Common Anode
 const int decimalPin = 35;  // Decimal point which separates hours and minutes.
+// Other Decimal Points on 36, 37, 38.
 
 /// @brief Prints the time to 4 segment displays
 /// @param hours integer number 0-99
