@@ -13,7 +13,7 @@
 // User Memory - WiFi SSID, PSK, Clock Configuration bits.
 Preferences preferences;
 
-// Static Constats. AP IDs, Default UserMem WiFi Value.
+// Static Constants. AP Credentials. Default UserMem WiFi Value.
 const char* APID = "NiceClock";
 const char* APSK = "MinesBigger";
 const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%Trfj&sPENuVe&sx";
