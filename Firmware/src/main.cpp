@@ -27,17 +27,18 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 AsyncWebServer server(80);
 
-const int ledPin = 1;  // 16 corresponds to GPIO16
-const int decimalPin = 35;
-
 // setting PWM properties
-const int freq = 2000;
-const int ledChannel = 0;
-const int resolution = 8;
+#define freq 2000
+#define ledChannel 0
+#define ledPWMResolution 8
 
 // Pins used for segment displays
 const int hours_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
 const int minutes_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
+
+// Additional Control Pins
+const int ledPin = 1;       // Power pin for segment displays. Common Anode
+const int decimalPin = 35;  // Decimal point which separates hours and minutes.
 
 /// @brief Prints the time to 4 segment displays
 /// @param hours integer number 0-99
@@ -81,10 +82,13 @@ void printTime(int hours, int minutes){
   digitalWrite(minutes_pin[3], (minutesO >> 3) & 1);  // D1
 }
 
+// Flag the main loop to show the IP Address of the clock.
 static void IRAM_ATTR showIPFlag(){
   showIP = 1;
 }
 
+/// @brief Flashes the IP Address of the device on the main display.
+/// @param localIP IPAddres object. Basically an array of 8 bit integers.
 void displayIP(IPAddress localIP) {
   pinMode(38, OUTPUT);
   digitalWrite(decimalPin, 1);
@@ -108,6 +112,7 @@ void displayIP(IPAddress localIP) {
   pinMode(38, INPUT);
 }
 
+/// @brief Initializes BH1730 Ambient Light Sensor over I2C.
 void initLightSensor() {
   Wire.beginTransmission(0x29);
   Wire.write(0x80);
@@ -115,6 +120,8 @@ void initLightSensor() {
   Wire.endTransmission();
 }
 
+/// @brief Reads the ambient light bits inside the ambient light sensor
+/// @return 8 bit integer mapped between the user setable min and max brightness values.
 uint8_t readAmbientLightData(){
   Wire.beginTransmission(0x29);
   Wire.write(0b10010100);
@@ -132,13 +139,8 @@ uint8_t readAmbientLightData(){
   return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 10), preferences.getInt("maxBrightness", 255)) );
 }
 
+// Moving average to smooth out changes in the ambient light.
 movingAvg ambientLight(10);
-
-// Ambient Light Moving Average
-const int numReadings = 10; // Number of readings to average
-int readings[numReadings];   // Array to store readings
-int indexAmbient = 0;               // Index for the current reading
-int total = 0;               // Running total of readings
 
 // Initial Setup Function
 void setup() {
@@ -151,16 +153,18 @@ void setup() {
 
   setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
   tzset();
-  ledcSetup(0, freq, 8);
-  ledcAttachPin(ledPin, 0);
-  ledcWrite(0, 50);
+  ledcSetup(ledChannel, freq, ledPWMResolution);
+  ledcAttachPin(ledPin, ledChannel);
+  ledcWrite(ledChannel, 50);
 
   // Begin I2C on pins 34, 33.
   Wire.begin(33, 21);
   initLightSensor();
   ambientLight.begin();
 
-  for (int i = 0; i < numReadings; i++) {
+  // Fill moving average with real data.
+  // Prevents the clock from bouncing around in brightness.
+  for (int i = 0; i < 10; i++) {
     ambientLight.reading(readAmbientLightData());
   }
 
@@ -218,6 +222,7 @@ void setup() {
     }
   }
 
+  // Shows the center point for the clock. Splitter between hour and minute.
   digitalWrite(decimalPin, 0);
 
   // Begin Time Keeping
@@ -339,6 +344,7 @@ void setup() {
   // Start the server
   server.begin();
 
+  // Use an interrupt to flag when the boot button has been pressed.
   attachInterrupt(0, showIPFlag, FALLING);
 }
 
@@ -379,7 +385,7 @@ void loop() {
   if ((millis() % 25) == 0) {
     uint8_t ambiReading = ambientLight.reading(readAmbientLightData());
     // Serial.println(ambiReading);
-    ledcWrite(0, ambiReading);
+    ledcWrite(ledChannel, ambiReading);
   }
 
   // Display IP if button flagged
