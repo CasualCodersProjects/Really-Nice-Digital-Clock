@@ -8,13 +8,14 @@
 #include <Wire.h>
 #include <NTPClient.h>
 #include <time.h>
-#include <movingAvg.h>  
+#include <movingAvg.h>
+#include <FastLED.h>
 
 // User Memory - WiFi SSID, PSK, Clock Configuration bits.
 Preferences preferences;
 
 // AccessPoint Credentials. Default UserMem WiFi Value.
-const char* APID = "NiceClock";
+const char* APID = "NixieClock";
 const char* APSK = "MinesBigger";
 const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%Trfj&sPENuVe&sx";
 
@@ -33,13 +34,17 @@ AsyncWebServer server(80);
 #define ledPWMResolution 8
 
 // Pins used for segment displays
-const int hours_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
-const int minutes_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
+const int hours_pin[8] = {9, 11, 12, 10, 18, 16, 15, 17};
+const int minutes_pin[8] = {13, 21, 33, 14, 38, 36, 35, 37};
 
 // Additional Control Pins
-const int ledPin = 1;       // Power pin for segment displays. Common Anode
-const int decimalPin = 35;  // Decimal point which separates hours and minutes.
+const int ledPin = 41;       // Power pin for segment displays. Common Anode
+#define NUM_LEDS 4
+#define DATA_PIN 1
+// const int decimalPin = 35;  // Decimal point which separates hours and minutes.
 // Other Decimal Points on 36, 37, 38.
+
+CRGB leds[NUM_LEDS];
 
 /// @brief Prints the time to 4 segment displays
 /// @param hours integer number 0-99
@@ -84,34 +89,34 @@ void printTime(int hours, int minutes){
 }
 
 // Flag the main loop to show the IP Address of the clock.
-static void IRAM_ATTR showIPFlag(){
-  showIP = 1;
-}
+// static void IRAM_ATTR showIPFlag(){
+//   showIP = 1;
+// }
 
 /// @brief Flashes the IP Address of the device on the main display.
 /// @param localIP IPAddres object. Basically an array of 8 bit integers.
-void displayIP(IPAddress localIP) {
-  pinMode(38, OUTPUT);
-  digitalWrite(decimalPin, 1);
-  digitalWrite(38, 0);
+// void displayIP(IPAddress localIP) {
+//   pinMode(38, OUTPUT);
+//   // digitalWrite(decimalPin, 1);
+//   digitalWrite(38, 0);
 
-  int octet0 = localIP[0];
-  int octet1 = localIP[1];
-  int octet2 = localIP[2];
-  int octet3 = localIP[3];
+//   int octet0 = localIP[0];
+//   int octet1 = localIP[1];
+//   int octet2 = localIP[2];
+//   int octet3 = localIP[3];
 
-  printTime(octet0 / 100, octet0 % 100);
-  delay(1500);
-  printTime(octet1 / 100, octet1 % 100);
-  delay(1500);
-  printTime(octet2 / 100, octet2 % 100);
-  delay(1500);
-  printTime(octet3 / 100, octet3 % 100);
-  delay(1500);
+//   printTime(octet0 / 100, octet0 % 100);
+//   delay(1500);
+//   printTime(octet1 / 100, octet1 % 100);
+//   delay(1500);
+//   printTime(octet2 / 100, octet2 % 100);
+//   delay(1500);
+//   printTime(octet3 / 100, octet3 % 100);
+//   delay(1500);
 
-  digitalWrite(decimalPin, 0);
-  pinMode(38, INPUT);
-}
+//   digitalWrite(decimalPin, 0);
+//   pinMode(38, INPUT);
+// }
 
 /// @brief Initializes BH1730 Ambient Light Sensor over I2C.
 void initLightSensor() {
@@ -137,7 +142,7 @@ uint8_t readAmbientLightData(){
   int lightLevel = (highByte << 8) | lowByte;
 
   // return the ambient light level
-  return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 10), preferences.getInt("maxBrightness", 255)) );
+  return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 50), preferences.getInt("maxBrightness", 255)) );
 }
 
 // Moving average to smooth out changes in the ambient light.
@@ -152,6 +157,12 @@ void setup() {
   Serial.println("Begin EEPROM");
   SPIFFS.begin();
 
+  // Begin LEDs
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+  fill_solid(leds, NUM_LEDS, CRGB::Red);
+  // leds[0] = CRGB::Purple;
+  FastLED.show();
+
   setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
   tzset();
   ledcSetup(ledChannel, freq, ledPWMResolution);
@@ -159,7 +170,7 @@ void setup() {
   ledcWrite(ledChannel, 50);
 
   // Begin I2C on pins 34, 33.
-  Wire.begin(33, 21);
+  Wire.begin(5, 6);
   initLightSensor();
   ambientLight.begin();
 
@@ -170,8 +181,8 @@ void setup() {
   }
 
   // Activate the decimal point as hour indicator.
-  pinMode(decimalPin, OUTPUT);
-  digitalWrite(decimalPin, 0);
+  // pinMode(decimalPin, OUTPUT);
+  // digitalWrite(decimalPin, 0);
 
   // Set the hours and minutes pins to output mode
   for (int i = 0; i < 8; i++) {
@@ -182,7 +193,7 @@ void setup() {
   // ---------- WiFi Section ----------
   // Access Point init
   Serial.println("Start Access Point");
-  WiFi.softAPsetHostname("niceclock");
+  WiFi.softAPsetHostname("nixieclock");
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(APID, APSK);
   softAPActive = true;
@@ -197,7 +208,7 @@ void setup() {
     Serial.println("WiFi Configured. Attempting Connection.");
    
     // Begin WiFi with the stored credentials.
-    WiFi.setHostname("niceclock");
+    WiFi.setHostname("nixieclock");
     WiFi.begin(preferences.getString("WiFiSSID", GARBAGE_STRING).c_str(), preferences.getString("WiFiPSK", GARBAGE_STRING).c_str());
     
     // Attempt to connect for ~5 seconds before continuing.
@@ -213,7 +224,7 @@ void setup() {
       WiFi.softAPdisconnect();
       WiFi.mode(WIFI_STA);
       softAPActive = false;
-      displayIP(WiFi.localIP());
+      // displayIP(WiFi.localIP());
     }
 
     // Connection unsuccessful. Continue to main loop.
@@ -224,7 +235,7 @@ void setup() {
   }
 
   // Shows the center point for the clock. Splitter between hour and minute.
-  digitalWrite(decimalPin, 0);
+  // digitalWrite(decimalPin, 0);
 
   // Begin Time Keeping
   timeClient.begin();
@@ -261,7 +272,7 @@ void setup() {
         preferences.putString("WiFiPSK", psk);
 
         // Begin WiFi with the stored credentials.
-        WiFi.setHostname("niceclock");
+        WiFi.setHostname("nixieclock");
         WiFi.begin(preferences.getString("WiFiSSID", GARBAGE_STRING).c_str(), preferences.getString("WiFiPSK", GARBAGE_STRING).c_str());
       }
     }
@@ -346,7 +357,7 @@ void setup() {
   server.begin();
 
   // Use an interrupt to flag when the boot button has been pressed.
-  attachInterrupt(0, showIPFlag, FALLING);
+  // attachInterrupt(0, showIPFlag, FALLING);
 }
 
 
@@ -363,7 +374,7 @@ void loop() {
   // Lost connection to the internet. Re-Enable the AP to avoid getting stuck.
   if(!softAPActive && !WiFi.isConnected()) {
     Serial.println("Lost Internet. Restarting AP.");
-    WiFi.softAPsetHostname("niceclock");
+    WiFi.softAPsetHostname("nixieclock");
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(APID, APSK);
     softAPActive = true;
@@ -390,8 +401,8 @@ void loop() {
   }
 
   // Display IP if button flagged
-  if (showIP){
-    displayIP(WiFi.localIP());
-    showIP = 0;
-  }
+  // if (showIP){
+  //   displayIP(WiFi.localIP());
+  //   showIP = 0;
+  // }
 }
