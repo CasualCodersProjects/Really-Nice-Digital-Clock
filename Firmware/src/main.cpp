@@ -16,7 +16,6 @@ const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%T
 
 // Global Variables
 bool softAPActive = 0;
-bool showIP = 0;
 
 // Server Stuff
 AsyncWebServer server(80);
@@ -33,8 +32,6 @@ const int decimalPin = 35;  // Decimal point which separates hours and minutes.
 // TimeKeeping
 int hours = 0;
 int minutes = 0;
-
-extern volatile unsigned long timer0_millis;
 
 // // to reset millis:
 // noInterrupts ();
@@ -77,10 +74,11 @@ void printTime(int hours, int minutes){
   digitalWrite(minutes_pin[3], (minutesO >> 3) & 1);  // D1
 }
 
-// Flag the main loop to show the IP Address of the clock.
-// static void IRAM_ATTR showIPFlag(){
-//   showIP = 1;
-// }
+// Reset the timer by rebooting the main CPU
+static void IRAM_ATTR resetTimerToZero(){
+  esp_restart();
+}
+// This won't come back to haunt me at all.
 
 /// @brief Flashes the IP Address of the device on the main display.
 /// @param localIP IPAddres object. Basically an array of 8 bit integers.
@@ -107,6 +105,7 @@ void displayIP(IPAddress localIP) {
   pinMode(38, INPUT);
 }
 
+
 // Initial Setup Function
 void setup() {
   // Serial for debug. Preferences for UserMem.
@@ -116,12 +115,10 @@ void setup() {
   Serial.println("Begin EEPROM");
   SPIFFS.begin();
 
-  setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
-  tzset();
-
   // Set Backlight on fullbright. For studio use. No need for ambient light.
-  pinMode(OUTPUT, ledPin);
-  digitalWrite(ledPin, 1);
+  ledcSetup(0, 2000, 8);
+  ledcAttachPin(ledPin, 0);
+  ledcWrite(0, 255);
 
   // Activate the decimal point as hour indicator.
   pinMode(decimalPin, OUTPUT);
@@ -191,12 +188,6 @@ void setup() {
     request->send(SPIFFS, "/milligram.min.css", "text/css");
   });
 
-  // Route to load TimeZone information.
-  server.on("/zones.csv", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println("Loading zones");
-    request->send(SPIFFS, "/zones.csv", "text/csv");
-  });
-
   // Handle HTTP POST requests for the root page
   server.on("/updateWiFi", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println("Request Received");
@@ -221,24 +212,9 @@ void setup() {
   });
 
   // Toggle between 12h and 24h format.
-  server.on("/updateTimeFormat", HTTP_POST, [](AsyncWebServerRequest *request) {
-    // Handling input data from the webpage
-    if (request->hasArg("isChecked")) {
-      String isChecked = request->arg("isChecked");
-      if (isChecked == "true") {
-        preferences.putBool("timeFormat", 0);
-      } else {
-        preferences.putBool("timeFormat", 1);
-      }
-    }
-
+  server.on("/resetTimer", HTTP_POST, [](AsyncWebServerRequest *request) {
+    esp_restart();
     request->send(200);
-  });
-
-  // Route to get configured time format (12|24)
-  server.on("/getTimeFormat", HTTP_GET, [](AsyncWebServerRequest *request){
-    String checkboxStateStr = preferences.getBool("timeFormat", 1) ? "false" : "true";
-    request->send(200, "text/plain", checkboxStateStr);
   });
 
   // Route to get configured WiFi SSID
@@ -247,41 +223,11 @@ void setup() {
     request->send(200, "text/plain", wiFiSSID);
   });
 
-  // Route to get configured Minimum Brightness
-  server.on("/getMinBrightness", HTTP_GET, [](AsyncWebServerRequest *request){
-    String minBrightness = String(preferences.getInt("minBrightness", 10));
-    request->send(200, "text/plain", minBrightness);
-  });
-
-  // Route to get configured Maximum Brightness
-  server.on("/getMaxBrightness", HTTP_GET, [](AsyncWebServerRequest *request){
-    String maxBrightness = String(preferences.getInt("maxBrightness", 255));
-    request->send(200, "text/plain", maxBrightness);
-  });
-
-  // Route to get update ESP-Side Brightness limits.
-  server.on("/updateBrightness", HTTP_POST, [](AsyncWebServerRequest *request){
-    Serial.println("Request Received");
-
-    // Handling input data from the webpage. ALL EEPROM Values updated
-    if (request->hasParam("minBrightnessSlider", true) && request->hasParam("maxBrightnessSlider", true)) {
-      int min = request->getParam("minBrightnessSlider", true)->value().toInt();
-      int max = request->getParam("maxBrightnessSlider", true)->value().toInt();
-
-      preferences.putInt("minBrightness", min);
-      preferences.putInt("maxBrightness", max);
-    }
-
-    // Done
-    request->send(200);
-  });
-
-
   // Start the server
   server.begin();
 
   // Use an interrupt to flag when the boot button has been pressed.
-  // attachInterrupt(0, showIPFlag, FALLING);
+  attachInterrupt(0, resetTimerToZero, FALLING);
 }
 
 
@@ -307,9 +253,4 @@ void loop() {
   long timeBaseSeconds = millis() / 1000;
   printTime(timeBaseSeconds / 60 , timeBaseSeconds % 60);
 
-  // Display IP if button flagged
-  if (showIP){
-    displayIP(WiFi.localIP());
-    showIP = 0;
-  }
 }
