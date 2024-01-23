@@ -5,16 +5,12 @@
 #include <AsyncUDP.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
-#include <Wire.h>
-#include <NTPClient.h>
-#include <time.h>
-#include <movingAvg.h>  
 
 // User Memory - WiFi SSID, PSK, Clock Configuration bits.
 Preferences preferences;
 
 // AccessPoint Credentials. Default UserMem WiFi Value.
-const char* APID = "NiceClock";
+const char* APID = "studioCounter";
 const char* APSK = "MinesBigger";
 const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%Trfj&sPENuVe&sx";
 
@@ -23,14 +19,7 @@ bool softAPActive = 0;
 bool showIP = 0;
 
 // Server Stuff
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
 AsyncWebServer server(80);
-
-// setting PWM properties
-#define freq 2000
-#define ledChannel 0
-#define ledPWMResolution 8
 
 // Pins used for segment displays
 const int hours_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
@@ -41,16 +30,21 @@ const int ledPin = 1;       // Power pin for segment displays. Common Anode
 const int decimalPin = 35;  // Decimal point which separates hours and minutes.
 // Other Decimal Points on 36, 37, 38.
 
+// TimeKeeping
+int hours = 0;
+int minutes = 0;
+
+extern volatile unsigned long timer0_millis;
+
+// // to reset millis:
+// noInterrupts ();
+// timer0_millis = 0;
+// interrupts ();
+
 /// @brief Prints the time to 4 segment displays
 /// @param hours integer number 0-99
 /// @param minutes integer number 0-99
 void printTime(int hours, int minutes){
-  bool timeFormat = preferences.getBool("timeFormat", 1);
-  // Serial.println(timeFormat);
-  if (!timeFormat) {
-    hours = (hours % 12) ?: 12;
-  }
-
   // Break up the two digit integers to single digits.
   int hoursT = hours / 10;
   int hoursO = hours % 10;
@@ -84,9 +78,9 @@ void printTime(int hours, int minutes){
 }
 
 // Flag the main loop to show the IP Address of the clock.
-static void IRAM_ATTR showIPFlag(){
-  showIP = 1;
-}
+// static void IRAM_ATTR showIPFlag(){
+//   showIP = 1;
+// }
 
 /// @brief Flashes the IP Address of the device on the main display.
 /// @param localIP IPAddres object. Basically an array of 8 bit integers.
@@ -113,36 +107,6 @@ void displayIP(IPAddress localIP) {
   pinMode(38, INPUT);
 }
 
-/// @brief Initializes BH1730 Ambient Light Sensor over I2C.
-void initLightSensor() {
-  Wire.beginTransmission(0x29);
-  Wire.write(0x80);
-  Wire.write(0x3);
-  Wire.endTransmission();
-}
-
-/// @brief Reads the ambient light bits inside the ambient light sensor
-/// @return 8 bit integer mapped between the user setable min and max brightness values.
-uint8_t readAmbientLightData(){
-  Wire.beginTransmission(0x29);
-  Wire.write(0b10010100);
-  Wire.endTransmission();
-  Wire.requestFrom(0x29, 2);
-
-  // Read the data from the BH1730
-  byte highByte = Wire.read();
-  byte lowByte = Wire.read();
-
-  // Combine the high and low bytes to get the ambient light level
-  int lightLevel = (highByte << 8) | lowByte;
-
-  // return the ambient light level
-  return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 10), preferences.getInt("maxBrightness", 255)) );
-}
-
-// Moving average to smooth out changes in the ambient light.
-movingAvg ambientLight(10);
-
 // Initial Setup Function
 void setup() {
   // Serial for debug. Preferences for UserMem.
@@ -154,20 +118,10 @@ void setup() {
 
   setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
   tzset();
-  ledcSetup(ledChannel, freq, ledPWMResolution);
-  ledcAttachPin(ledPin, ledChannel);
-  ledcWrite(ledChannel, 50);
 
-  // Begin I2C on pins 34, 33.
-  Wire.begin(33, 21);
-  initLightSensor();
-  ambientLight.begin();
-
-  // Fill moving average with real data.
-  // Prevents the clock from bouncing around in brightness.
-  for (int i = 0; i < 10; i++) {
-    ambientLight.reading(readAmbientLightData());
-  }
+  // Set Backlight on fullbright. For studio use. No need for ambient light.
+  pinMode(OUTPUT, ledPin);
+  digitalWrite(ledPin, 1);
 
   // Activate the decimal point as hour indicator.
   pinMode(decimalPin, OUTPUT);
@@ -182,7 +136,7 @@ void setup() {
   // ---------- WiFi Section ----------
   // Access Point init
   Serial.println("Start Access Point");
-  WiFi.softAPsetHostname("niceclock");
+  WiFi.softAPsetHostname("studioCounter");
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(APID, APSK);
   softAPActive = true;
@@ -197,7 +151,7 @@ void setup() {
     Serial.println("WiFi Configured. Attempting Connection.");
    
     // Begin WiFi with the stored credentials.
-    WiFi.setHostname("niceclock");
+    WiFi.setHostname("studioCounter");
     WiFi.begin(preferences.getString("WiFiSSID", GARBAGE_STRING).c_str(), preferences.getString("WiFiPSK", GARBAGE_STRING).c_str());
     
     // Attempt to connect for ~5 seconds before continuing.
@@ -225,10 +179,6 @@ void setup() {
 
   // Shows the center point for the clock. Splitter between hour and minute.
   digitalWrite(decimalPin, 0);
-
-  // Begin Time Keeping
-  timeClient.begin();
-  timeClient.update();
 
   // ---------- Webpage Configuration Section ----------
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -261,7 +211,7 @@ void setup() {
         preferences.putString("WiFiPSK", psk);
 
         // Begin WiFi with the stored credentials.
-        WiFi.setHostname("niceclock");
+        WiFi.setHostname("studioCounter");
         WiFi.begin(preferences.getString("WiFiSSID", GARBAGE_STRING).c_str(), preferences.getString("WiFiPSK", GARBAGE_STRING).c_str());
       }
     }
@@ -326,27 +276,12 @@ void setup() {
     request->send(200);
   });
 
-  // Route to update timezone.
-  server.on("/setTZ", HTTP_POST, [](AsyncWebServerRequest *request){
-    Serial.println("Request Received");
-
-    // Handling input data from the webpage
-    if (request->hasArg("timezone")) {
-      String timezone = request->arg("timezone");
-      preferences.putString("timezone", timezone);
-      configTzTime(timezone.c_str(), "pool.ntp.org");
-      timeClient.update();
-    }
-
-    // Done
-    request->send(200);
-  });
 
   // Start the server
   server.begin();
 
   // Use an interrupt to flag when the boot button has been pressed.
-  attachInterrupt(0, showIPFlag, FALLING);
+  // attachInterrupt(0, showIPFlag, FALLING);
 }
 
 
@@ -357,37 +292,20 @@ void loop() {
     WiFi.softAPdisconnect();
     WiFi.mode(WIFI_STA);
     softAPActive = false;
-    timeClient.update();
   }
 
   // Lost connection to the internet. Re-Enable the AP to avoid getting stuck.
   if(!softAPActive && !WiFi.isConnected()) {
     Serial.println("Lost Internet. Restarting AP.");
-    WiFi.softAPsetHostname("niceclock");
+    WiFi.softAPsetHostname("studioCounter");
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(APID, APSK);
     softAPActive = true;
   }
 
-  // Reconnect to NTP To update time at midnight every night
-  if(timeClient.getMinutes() == 0 && timeClient.getSeconds() == 0){
-    timeClient.update();
-    delay(1000);
-  }
-
-  // Base the time on epoch. This allows DST To work automatically.
-  time_t now = timeClient.getEpochTime();
-  struct tm *timeinfo = localtime(&now);
-
   // Print the timezone info to SSDs
-  printTime(timeinfo->tm_hour, timeinfo->tm_min);
-
-  // Adjust light intensity using a moving average
-  if ((millis() % 25) == 0) {
-    uint8_t ambiReading = ambientLight.reading(readAmbientLightData());
-    // Serial.println(ambiReading);
-    ledcWrite(ledChannel, ambiReading);
-  }
+  long timeBaseSeconds = millis() / 1000;
+  printTime(timeBaseSeconds / 60 , timeBaseSeconds % 60);
 
   // Display IP if button flagged
   if (showIP){
