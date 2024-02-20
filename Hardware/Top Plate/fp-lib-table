@@ -1,0 +1,6 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "Indicator-Tube")(type "KiCad")(uri "${KIPRJMOD}/Indicator-Tube.pretty")(options "")(descr ""))
+  (lib (name "Sensor_Ambient")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/Sensor_Ambient.pretty")(options "")(descr ""))
+  (lib (name "Package_SO_Custom")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/Package_SO_Custom.pretty")(options "")(descr ""))
+)

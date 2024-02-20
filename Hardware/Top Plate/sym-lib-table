@@ -1,0 +1,7 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "Indicator_Tube")(type "KiCad")(uri "${KIPRJMOD}/Indicator_Tube.kicad_sym")(options "")(descr ""))
+  (lib (name "WorldSemi_LED")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/WorldSemi_LED.kicad_sym")(options "")(descr ""))
+  (lib (name "BH1730")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/BH1730.kicad_sym")(options "")(descr ""))
+  (lib (name "S2 Solo")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/S2 Solo.kicad_sym")(options "")(descr ""))
+)
