@@ -4,4 +4,5 @@
   (lib (name "WorldSemi_LED")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/WorldSemi_LED.kicad_sym")(options "")(descr ""))
   (lib (name "BH1730")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/BH1730.kicad_sym")(options "")(descr ""))
   (lib (name "S2 Solo")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/S2 Solo.kicad_sym")(options "")(descr ""))
+  (lib (name "LM5157")(type "KiCad")(uri "${KIPRJMOD}/LM5157.kicad_sym")(options "")(descr ""))
 )

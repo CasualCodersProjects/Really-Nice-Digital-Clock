@@ -3,4 +3,6 @@
   (lib (name "Indicator-Tube")(type "KiCad")(uri "${KIPRJMOD}/Indicator-Tube.pretty")(options "")(descr ""))
   (lib (name "Sensor_Ambient")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/Sensor_Ambient.pretty")(options "")(descr ""))
   (lib (name "Package_SO_Custom")(type "KiCad")(uri "/home/ian/Documents/Casual Coders/Projects/A Really Nice Digital Clock/Hardware/Libraries/Package_SO_Custom.pretty")(options "")(descr ""))
+  (lib (name "Diode_Custom")(type "KiCad")(uri "${KIPRJMOD}/Diode_Custom.pretty")(options "")(descr ""))
+  (lib (name "iv-12-tube-board-v2")(type "KiCad")(uri "${KIPRJMOD}/iv-12-tube-board-v2.pretty")(options "")(descr ""))
 )
