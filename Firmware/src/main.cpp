@@ -4,42 +4,51 @@
 #include <Preferences.h>
 #include <AsyncUDP.h>
 #include <ESPAsyncWebServer.h>
+#include <SPI.h>
 #include <SPIFFS.h>
 #include <Wire.h>
 #include <NTPClient.h>
 #include <time.h>
-#include <movingAvg.h>  
+#include <FastLED.h>
+
+#define STROBE_PIN 38
+#define LATCH_EN 39
+#define CLOCK_PIN 36
+#define DATA_PIN 35
 
 // User Memory - WiFi SSID, PSK, Clock Configuration bits.
 Preferences preferences;
 
+CRGB leds[8];
+
 // AccessPoint Credentials. Default UserMem WiFi Value.
-const char* APID = "NiceClock";
-const char* APSK = "MinesBigger";
+const char* APID = "VFDClock";
+const char* APSK = "VFDIV-12";
 const char* GARBAGE_STRING = "C!pbujKY2#4HXbcm5dY!WJX#ns29ff#vEDWmbZ9^d!QfBW@o%Trfj&sPENuVe&sx";
 
 // Global Variables
 bool softAPActive = 0;
-bool showIP = 0;
 
 // Server Stuff
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 AsyncWebServer server(80);
 
-// setting PWM properties
-#define freq 2000
-#define ledChannel 0
-#define ledPWMResolution 8
+// Define 7-segment display patterns for numbers 0-9
+// BA GF ED C
+const byte SEGMENT_PATTERNS[10] = {
+  0b1101111, // 0
+  0b1000001, // 1
+  0b1110110, // 2
+  0b1110011, // 3
+  0b1011001, // 4
+  0b0111011, // 5
+  0b0111111, // 6
+  0b1100001, // 7
+  0b1111111, // 8
+  0b1111011  // 9
+};
 
-// Pins used for segment displays
-const int hours_pin[8] = {9, 8, 3, 14, 13, 10, 11, 12};
-const int minutes_pin[8] = {7, 4, 5, 6, 18, 15, 16, 17};
-
-// Additional Control Pins
-const int ledPin = 1;       // Power pin for segment displays. Common Anode
-const int decimalPin = 35;  // Decimal point which separates hours and minutes.
-// Other Decimal Points on 36, 37, 38.
 
 /// @brief Prints the time to 4 segment displays
 /// @param hours integer number 0-99
@@ -52,96 +61,30 @@ void printTime(int hours, int minutes){
   }
 
   // Break up the two digit integers to single digits.
-  int hoursT = hours / 10;
-  int hoursO = hours % 10;
-  int minutesT = minutes / 10;
-  int minutesO = minutes % 10;
+  int hoursTen = hours / 10;
+  int hoursOne = hours % 10;
+  int minutesTen = minutes / 10;
+  int minutesOne = minutes % 10;
 
-  // Write binary coded decimal to each display.
-  // Tens Place
-  digitalWrite(hours_pin[4], (hoursT >> 0) & 1);  // A4
-  digitalWrite(hours_pin[5], (hoursT >> 1) & 1);  // B4
-  digitalWrite(hours_pin[6], (hoursT >> 2) & 1);  // C4
-  digitalWrite(hours_pin[7], (hoursT >> 3) & 1);  // D4
+  uint32_t encodedTime = (SEGMENT_PATTERNS[hoursTen] << 22) + (SEGMENT_PATTERNS[hoursOne] << 15) + (SEGMENT_PATTERNS[minutesTen] << 8) + (SEGMENT_PATTERNS[minutesOne] << 1);
 
-  // Ones Place
-  digitalWrite(hours_pin[0], (hoursO >> 0) & 1);   // A3
-  digitalWrite(hours_pin[1], (hoursO >> 1) & 1);  // B3
-  digitalWrite(hours_pin[2], (hoursO >> 2) & 1);  // C3
-  digitalWrite(hours_pin[3], (hoursO >> 3) & 1);  // D3
+  // Drive strobe high. I think this is needed?
+  digitalWrite(STROBE_PIN, 1);
+  digitalWrite(LATCH_EN, 0);
 
-  // Tens Place
-  digitalWrite(minutes_pin[4], (minutesT >> 0) & 1);  // A2
-  digitalWrite(minutes_pin[5], (minutesT >> 1) & 1);  // B2
-  digitalWrite(minutes_pin[6], (minutesT >> 2) & 1);  // C2
-  digitalWrite(minutes_pin[7], (minutesT >> 3) & 1);  // D2
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  SPI.transfer32(encodedTime);
+  SPI.endTransaction();
 
-  // Ones Place
-  digitalWrite(minutes_pin[0], (minutesO >> 0) & 1);  // A1
-  digitalWrite(minutes_pin[1], (minutesO >> 1) & 1);  // B1
-  digitalWrite(minutes_pin[2], (minutesO >> 2) & 1);  // C1
-  digitalWrite(minutes_pin[3], (minutesO >> 3) & 1);  // D1
+  // Pulse latch
+  digitalWrite(LATCH_EN, 1);
+  delay(1);
+  digitalWrite(LATCH_EN, 0);
+
+  // Strobe pin low for normal operation.
+  digitalWrite(STROBE_PIN, 0);
 }
 
-// Flag the main loop to show the IP Address of the clock.
-static void IRAM_ATTR showIPFlag(){
-  showIP = 1;
-}
-
-/// @brief Flashes the IP Address of the device on the main display.
-/// @param localIP IPAddres object. Basically an array of 8 bit integers.
-void displayIP(IPAddress localIP) {
-  pinMode(38, OUTPUT);
-  digitalWrite(decimalPin, 1);
-  digitalWrite(38, 0);
-
-  int octet0 = localIP[0];
-  int octet1 = localIP[1];
-  int octet2 = localIP[2];
-  int octet3 = localIP[3];
-
-  printTime(octet0 / 100, octet0 % 100);
-  delay(1500);
-  printTime(octet1 / 100, octet1 % 100);
-  delay(1500);
-  printTime(octet2 / 100, octet2 % 100);
-  delay(1500);
-  printTime(octet3 / 100, octet3 % 100);
-  delay(1500);
-
-  digitalWrite(decimalPin, 0);
-  pinMode(38, INPUT);
-}
-
-/// @brief Initializes BH1730 Ambient Light Sensor over I2C.
-void initLightSensor() {
-  Wire.beginTransmission(0x29);
-  Wire.write(0x80);
-  Wire.write(0x3);
-  Wire.endTransmission();
-}
-
-/// @brief Reads the ambient light bits inside the ambient light sensor
-/// @return 8 bit integer mapped between the user setable min and max brightness values.
-uint8_t readAmbientLightData(){
-  Wire.beginTransmission(0x29);
-  Wire.write(0b10010100);
-  Wire.endTransmission();
-  Wire.requestFrom(0x29, 2);
-
-  // Read the data from the BH1730
-  byte highByte = Wire.read();
-  byte lowByte = Wire.read();
-
-  // Combine the high and low bytes to get the ambient light level
-  int lightLevel = (highByte << 8) | lowByte;
-
-  // return the ambient light level
-  return( map(lightLevel, 0, 65535, preferences.getInt("minBrightness", 10), preferences.getInt("maxBrightness", 255)) );
-}
-
-// Moving average to smooth out changes in the ambient light.
-movingAvg ambientLight(10);
 
 // Initial Setup Function
 void setup() {
@@ -152,37 +95,36 @@ void setup() {
   Serial.println("Begin EEPROM");
   SPIFFS.begin();
 
-  setenv("TZ", preferences.getString("timezone", "UTC").c_str(), 1);
+  // Config latch and strobe pins.
+  pinMode(STROBE_PIN, OUTPUT);
+  pinMode(LATCH_EN, OUTPUT);
+  digitalWrite(STROBE_PIN, 1);
+  digitalWrite(LATCH_EN, 0);
+
+  // Config SPI on clock/data pins.
+  SPI.begin(CLOCK_PIN, -1, DATA_PIN);
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+  SPI.transfer32(0xFFFFFFFF);
+  SPI.endTransaction();
+  // Pulse latch to hold the new data
+  digitalWrite(LATCH_EN, 1);
+  delay(1);
+  digitalWrite(LATCH_EN, 0);
+  // Strobe low for normal oepration?
+  digitalWrite(STROBE_PIN, 0);
+
+  // config underglow.
+  FastLED.addLeds<WS2812, 3, GRB>(leds, 8);
+  fill_solid(leds, 8, CRGB::DarkOliveGreen);
+  FastLED.show();
+
+  setenv("TZ", preferences.getString("timezone", "EST5EDT").c_str(), 1);
   tzset();
-  ledcSetup(ledChannel, freq, ledPWMResolution);
-  ledcAttachPin(ledPin, ledChannel);
-  ledcWrite(ledChannel, 50);
-
-  // Begin I2C on pins 34, 33.
-  Wire.begin(33, 21);
-  initLightSensor();
-  ambientLight.begin();
-
-  // Fill moving average with real data.
-  // Prevents the clock from bouncing around in brightness.
-  for (int i = 0; i < 10; i++) {
-    ambientLight.reading(readAmbientLightData());
-  }
-
-  // Activate the decimal point as hour indicator.
-  pinMode(decimalPin, OUTPUT);
-  digitalWrite(decimalPin, 0);
-
-  // Set the hours and minutes pins to output mode
-  for (int i = 0; i < 8; i++) {
-    pinMode(hours_pin[i], OUTPUT);
-    pinMode(minutes_pin[i], OUTPUT);
-  }
   
   // ---------- WiFi Section ----------
   // Access Point init
   Serial.println("Start Access Point");
-  WiFi.softAPsetHostname("niceclock");
+  WiFi.softAPsetHostname(APID);
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(APID, APSK);
   softAPActive = true;
@@ -213,7 +155,6 @@ void setup() {
       WiFi.softAPdisconnect();
       WiFi.mode(WIFI_STA);
       softAPActive = false;
-      displayIP(WiFi.localIP());
     }
 
     // Connection unsuccessful. Continue to main loop.
@@ -222,9 +163,6 @@ void setup() {
       Serial.println("\nConnection Failed. Please connect to the webportal and enter valid information.");
     }
   }
-
-  // Shows the center point for the clock. Splitter between hour and minute.
-  digitalWrite(decimalPin, 0);
 
   // Begin Time Keeping
   timeClient.begin();
@@ -328,7 +266,7 @@ void setup() {
 
   // Route to update timezone.
   server.on("/setTZ", HTTP_POST, [](AsyncWebServerRequest *request){
-    Serial.println("Request Received");
+    Serial.println("setTZ Request Received");
 
     // Handling input data from the webpage
     if (request->hasArg("timezone")) {
@@ -344,9 +282,6 @@ void setup() {
 
   // Start the server
   server.begin();
-
-  // Use an interrupt to flag when the boot button has been pressed.
-  attachInterrupt(0, showIPFlag, FALLING);
 }
 
 
@@ -380,18 +315,8 @@ void loop() {
   struct tm *timeinfo = localtime(&now);
 
   // Print the timezone info to SSDs
-  printTime(timeinfo->tm_hour, timeinfo->tm_min);
-
-  // Adjust light intensity using a moving average
-  if ((millis() % 25) == 0) {
-    uint8_t ambiReading = ambientLight.reading(readAmbientLightData());
-    // Serial.println(ambiReading);
-    ledcWrite(ledChannel, ambiReading);
+  if (millis() % 500 == 0) {
+    printTime(timeinfo->tm_hour, timeinfo->tm_min);
   }
 
-  // Display IP if button flagged
-  if (showIP){
-    displayIP(WiFi.localIP());
-    showIP = 0;
-  }
 }

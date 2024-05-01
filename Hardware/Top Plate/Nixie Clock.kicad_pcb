@@ -9231,7 +9231,7 @@
 		(descr "PLCC, 44 pins, surface mount")
 		(tags "plcc smt")
 		(property "Reference" "U5"
-			(at 0 9.825 0)
+			(at 0 -0.127 0)
 			(layer "B.SilkS")
 			(uuid "eb6b1ac9-a1f3-48fb-97f2-07500fd21f21")
 			(effects
