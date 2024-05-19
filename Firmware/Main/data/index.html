@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nice Clock</title>
+    <link rel="stylesheet" href="milligram.min.css">
+    <style>
+      /* Add your custom button style */
+      .custom-button {
+        background-color: crimson; /* Set your preferred background color */
+        border-color: red;
+        color: white; /* Set the text color for better contrast */
+        /* You can add more styles as needed */
+      }
+      .background {
+        background-color: #0e0e0e;
+        color: grey;
+        outline-color: #1e1e1e;
+      }
+    </style>
+</head>
+
+<body class="background">
+  <h1 class="text-center p-1">Casual Coders Digital Clock</h1>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>Set your timezone:</h2>
+        <select id="timezone" class="background">
+          <option value="">Select timezone</option>
+        </select>
+        <div id='result'></div>
+        <button class="custom-button" type="button" id="updateTZ" onclick="submitTZ()">Update</button>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <label class="checkbox">
+          <input type="checkbox" id="myCheckbox" onchange="submitTimeFormat()"> 12 Hour Format
+        </label>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>WiFi:</h2>
+        <form id="wifiForm" >
+          <input type="text" name="ssid" id="ssid" placeholder="SSID" class="background">
+          <br>
+          <input type="text" name="psk" id="psk" placeholder="Password" class="background">
+          <br>
+          <button class="custom-button" type="button" id="submit" name="submit" onclick="submitWiFiForm()">Submit</button>
+        </form>
+        <div id='result'></div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <div class="container">
+    <div class="row">
+      <div class="column column-50 column-offset-25 text-center">
+        <h2>Brightness:</h2>
+        <form id="brightnessForm">
+          <label for="minBrightness">Minimum Brightness</label>
+          <br>
+          <input type="range" class="range" min="0" max="255" id="minBrightnessSlider" name="minBrightnessSlider"value="20" oninput="updateNumberBox('minBrightness', 'minBrightnessSlider')" onchange="updateBrightness()">
+          <span id="minBrightness">20</span>
+          <br>
+          <label for="maxBrightness">Maximum Brightness</label>
+          <br>
+          <input type="range" class="range" min="0" max="255" id="maxBrightnessSlider" name="maxBrightnessSlider" value="255" oninput="updateNumberBox('maxBrightness', 'maxBrightnessSlider')" onchange="updateBrightness()">
+          <span id="maxBrightness">255</span>
+        </form>
+        <div id='result'></div>
+      </div>
+    </div>
+  </div>
+  <br>
+
+  <script>
+    // Pull Timezone information from embedded CSV File.
+    var timezoneSelect = document.getElementById("timezone");
+
+    // Populate TimeZone info from embedded CSV File.
+    function populateTimezones(csvData) {
+      var lines = csvData.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var parts = lines[i].split(',');
+        var timezone = parts[0].replace(/"/g, ''); // Remove quotes
+        var offset = parts[1].replace(/"/g, ''); // Remove quotes
+
+        var option = document.createElement("option");
+        option.value = offset;
+        option.text = timezone;
+        timezoneSelect.add(option);
+      }
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "zones.csv", true);
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState == 4 && xhr.status == 200) {
+        populateTimezones(xhr.responseText);
+      }
+    };
+    xhr.send();
+
+
+    // Submit the timezone form
+    function submitTZ() {
+      var selectedTimezone = document.getElementById("timezone").value;
+      console.log(selectedTimezone);
+      var formData = new FormData();
+      formData.append("timezone", selectedTimezone);
+
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/setTZ', true);
+      xhr.send(formData);
+      console.log(formData);
+    }
+
+    // Posts wifi data when the associated 'submit' button is pressed.
+    function submitWiFiForm(){
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData(document.getElementById('wifiForm'));
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/updateWiFi', true);
+      xhr.send(formData);
+    }
+
+    // Posts time format data when the checkbox is checked.
+    function submitTimeFormat() {
+
+      var timeFormat = document.getElementById("myCheckbox").checked;
+      var formData = new FormData();
+      formData.append("isChecked", timeFormat);
+
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/updateTimeFormat', true);
+      xhr.send(formData);
+      console.log(formData);
+
+      // var xhr = new XMLHttpRequest();
+      // var isChecked = document.getElementById('myCheckbox').checked;
+      // console.log(isChecked);
+      // xhr.open("POST", '/updateTimezoneForm', true);
+      // xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+      // xhr.send("isChecked=" + isChecked);
+    }
+
+    // Query the present time format from the ESP32's internal memory.
+    function getTimeFormat() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('myCheckbox').checked = (xhr.responseText === 'true');
+        }
+      };
+      xhr.open("GET", '/getTimeFormat', true);
+      xhr.send();
+    }
+
+    function getWiFiSSID() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('ssid').value = xhr.responseText;
+        }
+      };
+      xhr.open("GET", '/getWiFiSSID', true);
+      xhr.send();
+    }
+
+    function getMinBrightness() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('minBrightnessSlider').value = xhr.responseText;
+          updateNumberBox('minBrightness', 'minBrightnessSlider')
+        }
+      };
+      xhr.open("GET", '/getMinBrightness', true);
+      xhr.send();
+    }
+
+    function getMaxBrightness() {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('maxBrightnessSlider').value = xhr.responseText;
+          updateNumberBox('maxBrightness', 'maxBrightnessSlider')
+        }
+      };
+      xhr.open("GET", '/getMaxBrightness', true);
+      xhr.send();
+    }
+    // Call the function on page load to initialize the checkbox state
+    getTimeFormat();
+    getWiFiSSID();
+    getMinBrightness();
+    getMaxBrightness();
+
+    // Link the external number view to the slider.
+    // Links the sliders together, such that min cannot be less than max, and max cannot be less than min.
+    function updateNumberBox(numberBoxId, sliderId) {
+      var numberBox = document.getElementById(numberBoxId);
+      var slider = document.getElementById(sliderId);
+      numberBox.textContent = slider.value;
+  
+      if (sliderId === 'minBrightnessSlider' && Number(minBrightnessSlider.value) > Number(maxBrightnessSlider.value)) {
+        maxBrightnessSlider.value = minBrightnessSlider.value;
+        document.getElementById('maxBrightness').textContent = minBrightnessSlider.value;
+      }
+  
+      if (sliderId === 'maxBrightnessSlider' && Number(maxBrightnessSlider.value) < Number(minBrightnessSlider.value)) {
+        minBrightnessSlider.value = maxBrightnessSlider.value;
+        document.getElementById('minBrightness').textContent = maxBrightnessSlider.value;
+      }
+    }
+
+    // Posts brightness data when the slider is released
+    function updateBrightness(){
+      var xhr = new XMLHttpRequest();
+      var formData = new FormData(document.getElementById('brightnessForm'));
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState == 4 && xhr.status == 200) {
+          document.getElementById('result').innerHTML = xhr.responseText;
+        }
+      };
+      xhr.open("POST", '/updateBrightness', true);
+      xhr.send(formData);
+    }
+  </script>
+</body>
+</html>
