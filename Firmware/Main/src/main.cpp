@@ -370,7 +370,7 @@ void loop() {
   }
 
   // Reconnect to NTP To update time at midnight every night
-  if(timeClient.getMinutes() == 0 && timeClient.getSeconds() == 0){
+  if(timeClient.getHours() == 0 && timeClient.getMinutes() == 0 && timeClient.getSeconds() == 0){
     timeClient.update();
     delay(1000);
   }
